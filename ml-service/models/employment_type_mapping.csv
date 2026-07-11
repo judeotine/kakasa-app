@@ -1,0 +1,6 @@
+employment_type_code,employment_type_label
+0,salaried
+1,self_employed
+2,student
+3,freelancer
+4,unemployed
