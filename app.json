@@ -1,27 +1,37 @@
 {
   "expo": {
-    "name": "M-Sente",
+    "name": "Kakasa",
     "slug": "m-sente",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "m-sente",
+    "scheme": "kakasa",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#14563E"
+      "backgroundColor": "#4C2311"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.msente.app"
+      "bundleIdentifier": "com.kakasa.app",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Kakasa uses Face ID to securely unlock your account and authorize transactions."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#14563E"
+        "backgroundColor": "#4C2311"
       },
-      "package": "com.msente.app"
+      "package": "com.kakasa.app",
+      "softwareKeyboardLayoutMode": "pan",
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -38,11 +48,19 @@
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#14563E"
+          "color": "#4C2311"
         }
       ],
       "expo-image",
-      "expo-status-bar"
+      "expo-local-authentication",
+      "expo-status-bar",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Kakasa uses the camera to capture your National ID and a quick face check for your loan application."
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true
@@ -50,7 +68,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "CHANGE_ME_RUN_EAS_INIT"
+        "projectId": "0bf3d476-1291-4762-af19-d266b8f70fe9"
       }
     },
     "owner": "judeotine"

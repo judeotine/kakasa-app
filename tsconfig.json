@@ -34,7 +34,9 @@
     "expo-env.d.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "supabase",
+    "ml-service"
   ],
   "extends": "expo/tsconfig.base"
 }

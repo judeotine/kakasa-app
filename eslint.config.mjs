@@ -29,6 +29,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ["dist/**", "node_modules/**", ".expo/**"],
+    ignores: ["dist/**", "node_modules/**", ".expo/**", "supabase/functions/**", "ml-service/**"],
   }
 );

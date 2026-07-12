@@ -1,98 +1,124 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
-  Modal,
-  Pressable,
-  Platform,
-  InputAccessoryView,
   ScrollView,
   ActivityIndicator,
   Alert,
-  type ListRenderItemInfo,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
-import { countries, type Country } from "@/lib/countries";
+import Svg, { Path } from "react-native-svg";
 import { AuthHeader } from "@/components/auth/AuthHeader";
 import { GoogleIcon } from "@/components/auth/GoogleIcon";
 import { supabase } from "@/lib/supabase";
+import { useLanguage } from "@/lib/i18n";
 
 WebBrowser.maybeCompleteAuthSession();
 
-const DEFAULT_COUNTRY = countries[0]!;
 const redirectTo = Linking.createURL("auth/callback");
 
-function paramsFromUrl(url: string): Record<string, string> {
-  const separator = url.includes("#") ? "#" : "?";
-  const query = url.includes(separator) ? url.slice(url.indexOf(separator) + 1) : "";
-  const params: Record<string, string> = {};
-  for (const pair of query.split("&")) {
-    if (!pair) continue;
-    const idx = pair.indexOf("=");
-    const key = decodeURIComponent(idx === -1 ? pair : pair.slice(0, idx));
-    params[key] = idx === -1 ? "" : decodeURIComponent(pair.slice(idx + 1));
-  }
-  return params;
+function MailIcon() {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
+        stroke="#A68A7B"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M22 6l-10 7L2 6"
+        stroke="#A68A7B"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
 }
 
-async function createSessionFromUrl(url: string) {
-  const params = paramsFromUrl(url);
-  if (params.error_description) throw new Error(params.error_description);
+function LockIcon() {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2zM7 11V7a5 5 0 0110 0v4"
+        stroke="#A68A7B"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
 
-  const { access_token, refresh_token } = params;
-  if (!access_token || !refresh_token) return;
-
-  const { error } = await supabase.auth.setSession({
-    access_token,
-    refresh_token,
-  });
-  if (error) throw error;
+function EyeIcon({ visible }: { visible: boolean }) {
+  if (visible) {
+    return (
+      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"
+          stroke="#A68A7B"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <Path
+          d="M12 15a3 3 0 100-6 3 3 0 000 6z"
+          stroke="#A68A7B"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+  }
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22"
+        stroke="#A68A7B"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
 }
 
 export default function LoginScreen() {
-  const insets = useSafeAreaInsets();
-  const [phone, setPhone] = useState("");
-  const [selectedCountry, setSelectedCountry] = useState<Country>(DEFAULT_COUNTRY);
-  const [pickerVisible, setPickerVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sending, setSending] = useState(false);
+  const { t } = useLanguage();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const phoneInputRef = useRef<TextInput>(null);
 
-  const filteredCountries = searchQuery
-    ? countries.filter(
-        (c) =>
-          c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.dialCode.includes(searchQuery),
-      )
-    : countries;
-
-  const handleLogIn = useCallback(async () => {
-    if (sending) return;
-    const national = phone.replace(/\D/g, "").replace(/^0+/, "");
-    if (national.length < 6) return;
-    const e164 = `${selectedCountry.dialCode}${national}`;
-
-    setSending(true);
-    const { error: otpError } = await supabase.auth.signInWithOtp({
-      phone: e164,
-    });
-    setSending(false);
-
-    if (otpError) {
-      Alert.alert("Couldn't send code", otpError.message);
+  const handleLogin = useCallback(async () => {
+    if (loading) return;
+    const trimmed = email.trim();
+    if (!trimmed || !password) {
+      Alert.alert(t("auth_missing_fields"), t("auth_missing_fields_msg"));
       return;
     }
 
-    router.push({ pathname: "/auth/verify", params: { phone: e164 } });
-  }, [phone, selectedCountry, sending]);
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: trimmed,
+      password,
+    });
+    setLoading(false);
+
+    if (error) {
+      Alert.alert(t("auth_sign_in_failed"), error.message);
+    }
+  }, [email, password, loading]);
 
   const handleGoogle = useCallback(async () => {
     if (googleLoading) return;
@@ -109,51 +135,36 @@ export default function LoginScreen() {
         redirectTo,
       );
       if (result.type === "success") {
-        await createSessionFromUrl(result.url);
+        const url = result.url;
+        const separator = url.includes("#") ? "#" : "?";
+        const params = Object.fromEntries(
+          url.slice(url.indexOf(separator) + 1).split("&").map((p) => {
+            const [k = "", v = ""] = p.split("=");
+            return [decodeURIComponent(k), decodeURIComponent(v)];
+          }),
+        );
+        if (params.access_token && params.refresh_token) {
+          await supabase.auth.setSession({
+            access_token: params.access_token,
+            refresh_token: params.refresh_token,
+          });
+        }
       }
     } catch (e) {
       Alert.alert(
-        "Google sign-in failed",
-        e instanceof Error ? e.message : "Something went wrong. Please try again.",
+        t("auth_google_failed"),
+        e instanceof Error ? e.message : t("auth_something_wrong"),
       );
     } finally {
       setGoogleLoading(false);
     }
   }, [googleLoading]);
 
-  const handleSelectCountry = useCallback((country: Country) => {
-    setSelectedCountry(country);
-    setPickerVisible(false);
-    setSearchQuery("");
-    phoneInputRef.current?.focus();
-  }, []);
-
-  const handleClearPhone = useCallback(() => {
-    setPhone("");
-    phoneInputRef.current?.focus();
-  }, []);
-
-  const renderCountryItem = useCallback(
-    ({ item }: ListRenderItemInfo<Country>) => (
-      <TouchableOpacity
-        style={pickerStyles.countryRow}
-        activeOpacity={0.6}
-        onPress={() => handleSelectCountry(item)}
-      >
-        <Text style={pickerStyles.countryFlag}>{item.flag}</Text>
-        <Text style={pickerStyles.countryName}>{item.name}</Text>
-        <Text style={pickerStyles.countryDial}>{item.dialCode}</Text>
-      </TouchableOpacity>
-    ),
-    [handleSelectCountry],
-  );
-
-  const keyExtractor = useCallback((item: Country) => item.code, []);
-
-  const isValid = phone.length >= 6;
+  const isValid = email.trim().length > 0 && password.length > 0;
 
   return (
     <View style={styles.screen}>
+      <StatusBar style="light" />
       <ScrollView
         style={styles.flex}
         contentContainerStyle={styles.scroll}
@@ -162,132 +173,93 @@ export default function LoginScreen() {
       >
         <AuthHeader />
 
-        <View style={styles.content}>
-          <Text style={styles.heading}>Welcome back!</Text>
-          <Text style={styles.subtitle}>
-            Enter your phone number. We will send you a confirmation code there
-          </Text>
+        <View style={styles.body}>
+          <Text style={styles.title}>{t("auth_sign_in")}</Text>
 
-          <View style={styles.inputRow}>
-            <TouchableOpacity
-              style={styles.countryPicker}
-              activeOpacity={0.7}
-              onPress={() => setPickerVisible(true)}
-            >
-              <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
-              <Text style={styles.countryCode}>{selectedCountry.dialCode}</Text>
-            </TouchableOpacity>
-
-            <View style={styles.phoneInputWrapper}>
-              <TextInput
-                ref={phoneInputRef}
-                style={styles.phoneInput}
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="Phone number"
-                placeholderTextColor="#A68A7B"
-                keyboardType="number-pad"
-                textContentType="telephoneNumber"
-                maxLength={15}
-                inputAccessoryViewID="phone"
-              />
-              {phone.length > 0 && (
-                <TouchableOpacity
-                  style={styles.clearButton}
-                  onPress={handleClearPhone}
-                  hitSlop={12}
-                >
-                  <View style={styles.clearIcon}>
-                    <Text style={styles.clearIconText}>{"×"}</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.logInButton, (!isValid || sending) && styles.logInButtonDisabled]}
-            activeOpacity={0.8}
-            onPress={handleLogIn}
-            disabled={!isValid || sending}
-          >
-            {sending ? (
-              <ActivityIndicator color="#C4A99E" />
-            ) : (
-              <Text style={[styles.logInButtonText, !isValid && styles.logInButtonTextDisabled]}>
-                Log in
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <TouchableOpacity
-            style={styles.googleButton}
-            activeOpacity={0.7}
-            onPress={handleGoogle}
-            disabled={googleLoading}
-          >
-            {googleLoading ? (
-              <ActivityIndicator color="#DA9133" />
-            ) : (
-              <GoogleIcon size={22} />
-            )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      {Platform.OS === "ios" && (
-        <InputAccessoryView nativeID="phone">
-          <View style={styles.accessoryBar} />
-        </InputAccessoryView>
-      )}
-
-      <Modal
-        visible={pickerVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setPickerVisible(false)}
-      >
-        <View style={[pickerStyles.container, { paddingTop: insets.top }]}>
-          <View style={pickerStyles.header}>
-            <Text style={pickerStyles.title}>Select country</Text>
-            <Pressable
-              onPress={() => {
-                setPickerVisible(false);
-                setSearchQuery("");
-              }}
-              hitSlop={12}
-            >
-              <Text style={pickerStyles.close}>Done</Text>
-            </Pressable>
-          </View>
-
-          <View style={pickerStyles.searchWrapper}>
+          <Text style={styles.label}>{t("auth_email")}</Text>
+          <View style={styles.inputWrapper}>
+            <MailIcon />
             <TextInput
-              style={pickerStyles.searchInput}
-              placeholder="Search countries"
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder={t("auth_email_placeholder")}
               placeholderTextColor="#A68A7B"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCorrect={false}
-              returnKeyType="search"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+              textContentType="emailAddress"
             />
           </View>
 
-          <FlatList
-            data={filteredCountries}
-            keyExtractor={keyExtractor}
-            renderItem={renderCountryItem}
-            keyboardShouldPersistTaps="handled"
-            initialNumToRender={20}
-          />
+          <Text style={styles.label}>{t("auth_password")}</Text>
+          <View style={styles.inputWrapper}>
+            <LockIcon />
+            <TextInput
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              placeholder={t("auth_password_placeholder")}
+              placeholderTextColor="#A68A7B"
+              secureTextEntry={!showPassword}
+              autoComplete="current-password"
+              textContentType="password"
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword((v) => !v)}
+              hitSlop={10}
+            >
+              <EyeIcon visible={showPassword} />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.signInButton, (!isValid || loading) && styles.buttonDisabled]}
+            activeOpacity={0.85}
+            onPress={handleLogin}
+            disabled={!isValid || loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.signInButtonText}>{`${t("auth_sign_in_btn")}  →`}</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.socialRow}>
+            <TouchableOpacity
+              style={styles.socialButton}
+              activeOpacity={0.7}
+              onPress={handleGoogle}
+              disabled={googleLoading}
+            >
+              {googleLoading ? (
+                <ActivityIndicator color="#4C2311" size="small" />
+              ) : (
+                <GoogleIcon size={22} />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => router.push("/auth/signup")}
+            hitSlop={8}
+          >
+            <Text style={styles.footerText}>
+              {t("auth_no_account")}{" "}
+              <Text style={styles.footerLink}>{t("auth_sign_up_link")}</Text>
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push("/auth/forgot-password")}
+            hitSlop={8}
+            style={styles.forgotButton}
+          >
+            <Text style={styles.forgotText}>{t("auth_forgot_password")}</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
+      </ScrollView>
     </View>
   );
 }
@@ -303,186 +275,90 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
   },
-  content: {
+  body: {
     flex: 1,
     paddingHorizontal: 24,
     paddingTop: 32,
+    paddingBottom: 40,
   },
-  heading: {
-    fontSize: 32,
+  title: {
+    fontSize: 26,
     fontWeight: "800",
     color: "#4C2311",
-    letterSpacing: -0.5,
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: "#633E2F",
+    textAlign: "center",
     marginBottom: 32,
   },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 24,
-  },
-  countryPicker: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#D9CCC4",
-    paddingHorizontal: 14,
-    height: 52,
-    gap: 8,
-  },
-  countryFlag: {
-    fontSize: 20,
-  },
-  countryCode: {
-    fontSize: 16,
-    fontWeight: "500",
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
     color: "#4C2311",
+    marginBottom: 8,
   },
-  phoneInputWrapper: {
-    flex: 1,
+  inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#D9CCC4",
+    borderRadius: 28,
     height: 52,
     paddingHorizontal: 16,
+    gap: 10,
+    marginBottom: 20,
+    backgroundColor: "#FFFFFF",
   },
-  phoneInput: {
+  input: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     color: "#4C2311",
     height: "100%",
   },
-  clearButton: {
-    marginLeft: 8,
-  },
-  clearIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "#C4A99E",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  clearIconText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#FFFFFF",
-    marginTop: -1,
-  },
-  logInButton: {
-    backgroundColor: "#DA9133",
-    borderRadius: 16,
-    height: 56,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  logInButtonDisabled: {
-    backgroundColor: "#F0DCC3",
-  },
-  logInButtonText: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-  logInButtonTextDisabled: {
-    color: "#C4A99E",
-  },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginTop: 28,
-    marginBottom: 28,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E8DDD6",
-  },
-  dividerText: {
-    fontSize: 14,
-    color: "#A68A7B",
-  },
-  googleButton: {
-    width: 56,
-    height: 56,
+  signInButton: {
+    backgroundColor: "#4C2311",
     borderRadius: 28,
-    borderWidth: 1,
-    borderColor: "#D9CCC4",
-    backgroundColor: "#FFFFFF",
+    height: 54,
     justifyContent: "center",
     alignItems: "center",
+    marginTop: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  signInButtonText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  socialRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 16,
+    marginTop: 32,
+    marginBottom: 32,
+  },
+  socialButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#F7F0EB",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  footerText: {
+    fontSize: 14,
+    color: "#633E2F",
+    textAlign: "center",
+  },
+  footerLink: {
+    color: "#DA9133",
+    fontWeight: "700",
+  },
+  forgotButton: {
+    marginTop: 14,
     alignSelf: "center",
   },
-  accessoryBar: {
-    height: 0,
-  },
-});
-
-const pickerStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E8DDD6",
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#4C2311",
-  },
-  close: {
-    fontSize: 16,
-    fontWeight: "600",
+  forgotText: {
+    fontSize: 14,
     color: "#DA9133",
-  },
-  searchWrapper: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  searchInput: {
-    backgroundColor: "#F7F0EB",
-    borderRadius: 12,
-    height: 44,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    color: "#4C2311",
-  },
-  countryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    gap: 12,
-  },
-  countryFlag: {
-    fontSize: 24,
-  },
-  countryName: {
-    flex: 1,
-    fontSize: 16,
-    color: "#4C2311",
-  },
-  countryDial: {
-    fontSize: 16,
-    color: "#633E2F",
+    fontWeight: "600",
   },
 });
