@@ -109,6 +109,18 @@ async function getLatestScore(userId: string): Promise<{ score: number; band: st
   return { score: Number(data.score), band: String(data.band) };
 }
 
+function redactPin(inputChain: string, action: string): string {
+  if (!inputChain) return inputChain;
+  const parts = inputChain.split("*");
+  if ((action === "repay" || action === "repay_partial") && parts.length >= 3) {
+    parts[parts.length - 1] = "****";
+  }
+  if (action === "new_user" && parts.length >= 5 && parts[0] === "1") {
+    parts[parts.length - 1] = "****";
+  }
+  return parts.join("*");
+}
+
 async function logSession(
   sessionId: string,
   phone: string,
@@ -122,7 +134,7 @@ async function logSession(
     phone_number: phone,
     user_id: userId,
     action,
-    input_chain: inputChain,
+    input_chain: redactPin(inputChain, action),
     language: lang,
   });
 }
