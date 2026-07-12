@@ -456,6 +456,14 @@ async function handleRegistration(
       return p === formattedPhone || p === phoneDigits;
     });
     if (match) {
+      const { data: existingProfile } = await admin
+        .from("profiles")
+        .select("id, ussd_pin_hash")
+        .eq("id", match.id)
+        .maybeSingle();
+      if (existingProfile?.ussd_pin_hash) {
+        return ussdResponse("Account already exists.\nDial back to log in.", true);
+      }
       userId = match.id;
     }
   }
@@ -472,7 +480,7 @@ async function handleRegistration(
     preferred_language: lang,
     ussd_pin_hash: pinHashed,
     onboarding_completed: true,
-  });
+  }, { onConflict: "id", ignoreDuplicates: true });
 
   if (profileErr) {
     return ussdResponse("Registration failed.\nPlease try again later.", true);
