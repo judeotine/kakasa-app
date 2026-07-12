@@ -488,4 +488,12 @@ export const APP_STRINGS: Record<string, string> = {
   receipt_download: "Download Receipt",
   receipt_not_found: "Receipt not found",
   receipt_not_found_msg: "This payment receipt could not be found.",
+
+  ussd_welcome: "Welcome to Kakasa USSD",
+  ussd_register: "Register",
+  ussd_repay: "Repay",
+  ussd_credit_score: "Credit Score",
+  ussd_lenders: "Eligible Lenders",
+  ussd_help: "Help",
+  ussd_language: "Language",
 };

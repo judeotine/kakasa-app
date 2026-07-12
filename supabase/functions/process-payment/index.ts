@@ -4,6 +4,8 @@ import {
   createUserClient,
   jsonResponse,
 } from "../_shared/supabaseAdmin.ts";
+import { sendSMS } from "../_shared/africastalking.ts";
+import { ussdText } from "../_shared/ussdStrings.ts";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
@@ -105,7 +107,7 @@ Deno.serve(async (req) => {
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("push_token, notification_loan_alerts, notification_sound")
+    .select("push_token, notification_loan_alerts, notification_sound, phone, preferred_language")
     .eq("id", user.id)
     .single();
 
@@ -147,6 +149,35 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify(pushBody),
     });
+  }
+
+  if (profile?.phone) {
+    const { data: scoreRow } = await admin
+      .from("credit_scores")
+      .select("score")
+      .eq("user_id", user.id)
+      .order("computed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const lang = profile.preferred_language ?? "eng";
+    const smsMessage = ussdText("sms_payment_confirm", lang, {
+      amount: String(amount),
+      provider: loan.provider ?? "Kakasa",
+      remaining: String(remaining_balance),
+      receipt: payment.receipt_number ?? transaction_ref,
+      score: scoreRow?.score ? String(scoreRow.score) : "---",
+    });
+
+    sendSMS(profile.phone, smsMessage).catch(() => {});
+
+    admin.from("sms_reminders_sent").insert({
+      loan_id,
+      user_id: user.id,
+      reminder_type: "payment_confirmation",
+      phone_number: profile.phone,
+      message_id: "",
+    }).then(() => {}).catch(() => {});
   }
 
   return jsonResponse({ payment });
