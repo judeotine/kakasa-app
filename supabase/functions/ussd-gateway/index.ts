@@ -399,13 +399,105 @@ async function handleLenders(steps: string[], user: UserContext): Promise<Respon
   );
 }
 
-function handleHelp(steps: string[], lang: string): Response {
+async function handleVerifyProvider(
+  steps: string[],
+  user: UserContext
+): Promise<Response> {
+  const lang = user.lang;
+
+  if (steps.length === 0) {
+    return ussdResponse(ussdText("verify_prompt", lang), false);
+  }
+
+  const query = steps[0]!.trim();
+
+  if (query.length < 2) {
+    return ussdResponse(ussdText("verify_too_short", lang), true);
+  }
+
+  const escaped = query.replace(/%/g, "\\%").replace(/_/g, "\\_");
+  const { data: matches } = await admin
+    .from("loan_providers")
+    .select("id, name, max_amount, min_rate, max_rate, min_score, term_min_months, term_max_months")
+    .ilike("name", `%${escaped}%`)
+    .order("name")
+    .limit(5);
+
+  if (!matches || matches.length === 0) {
+    return ussdResponse(ussdText("verify_not_found", lang, { query }), true);
+  }
+
+  let provider: Record<string, unknown>;
+  let actionSteps: string[];
+
+  if (matches.length > 1) {
+    if (steps.length === 1) {
+      const list = matches
+        .map((p: Record<string, unknown>, i: number) => `${i + 1}. ${p.name}`)
+        .join("\n");
+      return ussdResponse(ussdText("verify_multiple", lang, { query, list }), false);
+    }
+    const idx = parseInt(steps[1]!) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= matches.length) {
+      return ussdResponse(ussdText("invalid_input", lang, { menu: "" }), true);
+    }
+    provider = matches[idx]!;
+    actionSteps = steps.slice(2);
+  } else {
+    provider = matches[0]!;
+    actionSteps = steps.slice(1);
+  }
+
+  if (actionSteps.length === 0) {
+    return ussdResponse(
+      ussdText("verify_found", lang, {
+        name: String(provider.name),
+        max: formatAmount(Number(provider.max_amount)),
+        min_rate: String(provider.min_rate),
+        max_rate: String(provider.max_rate),
+        term_min: String(provider.term_min_months),
+        term_max: String(provider.term_max_months),
+      }),
+      false
+    );
+  }
+
+  if (actionSteps[0] === "1") {
+    const { data: others } = await admin
+      .from("loan_providers")
+      .select("name, max_amount, min_rate, max_rate")
+      .neq("id", provider.id)
+      .order("min_rate", { ascending: true })
+      .limit(2);
+
+    let comparison = `${provider.name}:\n  ${formatAmount(Number(provider.max_amount))} UGX, ${provider.min_rate}-${provider.max_rate}%`;
+    if (others) {
+      for (const o of others) {
+        comparison += `\n${o.name}:\n  ${formatAmount(Number(o.max_amount))} UGX, ${o.min_rate}-${o.max_rate}%`;
+      }
+    }
+
+    return ussdResponse(ussdText("verify_compare", lang, { comparison }), true);
+  }
+
+  if (actionSteps[0] === "2") {
+    return ussdResponse(
+      ussdText("verify_apply", lang, { name: String(provider.name) }),
+      true
+    );
+  }
+
+  return ussdResponse(ussdText("invalid_input", lang, { menu: "" }), true);
+}
+
+async function handleHelp(steps: string[], lang: string, user: UserContext): Promise<Response> {
   if (steps.length === 0) return ussdResponse(ussdText("help_menu", lang), false);
   switch (steps[0]) {
     case "1": return ussdResponse(ussdText("help_kakasa", lang), true);
     case "2": return ussdResponse(ussdText("help_loans", lang), true);
     case "3": return ussdResponse(ussdText("help_scores", lang), true);
     case "4": return ussdResponse(ussdText("help_contact", lang), true);
+    case "5": return handleVerifyProvider(steps.slice(1), user);
     default: return ussdResponse(ussdText("help_menu", lang), false);
   }
 }
@@ -580,7 +672,7 @@ Deno.serve(async (req) => {
   } else if (hasActive) {
     menuMap = { "1": "repay", "2": "loan_details", "3": "score", "4": "tip" };
   } else {
-    menuMap = { "1": "lenders", "2": "score", "3": "tip", "4": "help" };
+    menuMap = { "1": "lenders", "2": "score", "3": "verify_provider", "4": "help" };
   }
 
   const action = menuMap[steps[0]!] ?? "invalid";
@@ -597,7 +689,9 @@ Deno.serve(async (req) => {
     case "lenders":
       return handleLenders(subSteps, user);
     case "help":
-      return handleHelp(subSteps, user.lang);
+      return handleHelp(subSteps, user.lang, user);
+    case "verify_provider":
+      return handleVerifyProvider(subSteps, user);
     case "tip": {
       const tipKey = getTip(user.id);
       return ussdResponse(ussdText(tipKey, user.lang), true);
