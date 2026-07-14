@@ -10,7 +10,7 @@ Reachable on a smartphone, a feature phone (USSD), a phone call (voice), and by 
 
 <br/>
 
-🏆 **1st Runner-Up - Bank of Uganda @60 Innovation Challenge**
+🏆 **1st Runner-Up - Bank of Uganda @60 Hackathon**
 Selected among **1,069 applicants**
 
 Built by **Jude Otine · Grace · William Benjamin · Conrad Wagabi · Catherine Ndagire**
@@ -438,7 +438,7 @@ Apply the SQL in `supabase/migrations/` (in order) and deploy the functions in `
 
 ## The Team
 
-Built for the **Bank of Uganda @60 Innovation Challenge**, where Kakasa was selected as **1st Runner-Up among 1,069 applicants**.
+Built for the **Bank of Uganda @60 Hackathon**, where Kakasa was selected as **1st Runner-Up among 1,069 applicants**.
 
 | Member |
 | --- |
